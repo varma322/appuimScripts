@@ -4,7 +4,7 @@ import time
 from dotenv import load_dotenv
 
 from bot.appium_driver import create_driver
-from bot.flipkart_app_checker import open_product, detect_state, get_price
+from bot.flipkart_app_checker import open_product, detect_state, get_price, close_popups, save_screenshot
 from bot.telegram_notifier import send_telegram
 from bot.state_store import update_product_state, mark_alerted
 from bot.scheduler import sleep_random
@@ -47,9 +47,13 @@ def main():
 
                 print(f"\n🔎 Checking: {name}")
                 open_product(driver, url)
-
+                close_popups(driver)
                 status = detect_state(driver)
                 price = get_price(driver)
+                if status == "UNKNOWN":
+                    path = save_screenshot(driver, "unknown_ui")
+                    send_telegram(f"⚠ UNKNOWN UI detected\n{name}\nScreenshot saved: {path}\n{url}")
+                    continue
 
                 print("STATUS:", status, "| PRICE:", price)
 

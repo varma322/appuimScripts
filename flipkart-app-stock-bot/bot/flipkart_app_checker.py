@@ -1,10 +1,41 @@
 import time
 import re
 from selenium.webdriver.common.by import By
+import os
+import datetime
+
 
 
 FLIPKART_PKG = "com.flipkart.android"
 
+def save_screenshot(driver, reason="unknown"):
+    os.makedirs("screenshots", exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    path = f"screenshots/{reason}_{ts}.png"
+    driver.save_screenshot(path)
+    return path
+
+
+
+def close_popups(driver):
+    # common close buttons
+    candidates = [
+        "//*[@content-desc='Close']",
+        "//*[@text='✕']",
+        "//*[@text='X']",
+        "//*[@text='Close']",
+        "//*[@text='Not now']",
+        "//*[@text='Skip']"
+    ]
+
+    for xp in candidates:
+        els = driver.find_elements(By.XPATH, xp)
+        if els:
+            try:
+                els[0].click()
+                time.sleep(1)
+            except:
+                pass
 
 def exists_contains(driver, text):
     xpath = f"//*[contains(@text, '{text}')]"
