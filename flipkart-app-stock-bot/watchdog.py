@@ -1,13 +1,16 @@
 import subprocess
 import time
-import os
 import sys
 
-CHECK_INTERVAL = 60  # watchdog checks every 60s
+from bot.telegram_notifier import send_telegram
+
+CHECK_INTERVAL = 30
 RESTART_DELAY = 5
+
 
 def start_bot():
     return subprocess.Popen([sys.executable, "main.py"])
+
 
 def main():
     print("🛡 Watchdog started")
@@ -16,11 +19,17 @@ def main():
     while True:
         time.sleep(CHECK_INTERVAL)
 
-        # if bot exited -> restart
         if bot.poll() is not None:
-            print("⚠ Bot crashed. Restarting...")
+            msg = "⚠ Watchdog: bot crashed, restarting now..."
+            print(msg)
+            try:
+                send_telegram(msg)
+            except:
+                pass
+
             time.sleep(RESTART_DELAY)
             bot = start_bot()
+
 
 if __name__ == "__main__":
     main()

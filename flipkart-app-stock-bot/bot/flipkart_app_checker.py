@@ -1,6 +1,7 @@
 import time
 import re
 from selenium.webdriver.common.by import By
+from utils.logger import logger
 import os
 import datetime
 

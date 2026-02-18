@@ -16,6 +16,12 @@ def send_telegram(msg: str):
     payload = {
         "chat_id": CHAT_ID,
         "text": msg,
-        "disable_web_page_preview": False
+        "disable_web_page_preview": True
     }
-    requests.post(url, json=payload, timeout=20)
+
+    try:
+        r = requests.post(url, json=payload, timeout=20)
+        r.raise_for_status()
+    except Exception:
+        # Don't crash bot if telegram fails
+        pass

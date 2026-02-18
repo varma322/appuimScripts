@@ -2,16 +2,19 @@ import json
 import os
 import time
 from dotenv import load_dotenv
+from bot.address_switcher import select_saved_address
 
 from bot.appium_driver import create_driver
 from bot.flipkart_app_checker import open_product, detect_state, get_price, close_popups, save_screenshot
 from bot.telegram_notifier import send_telegram
 from bot.state_store import update_product_state, mark_alerted
 from bot.scheduler import sleep_random
+from utils.logger import logger
 
 load_dotenv()
 
 REMINDER_SECONDS = int(os.getenv("REMINDER_SECONDS", "2700"))
+ADDRESSES = ["Kishore", "Varma Kamadi"]
 
 
 def load_products():
@@ -39,80 +42,98 @@ def main():
         driver = None
         try:
             driver = create_driver()
+            logger.info("🔄 Home screen")
 
-            for p in products:
-                name = p["name"]
-                url = p["url"].split("?")[0]
-                target = int(p.get("target_price", 10**9))
+            for addr in ADDRESSES:
+                logger.info(f"📍 Switching address -> {addr}")
+                select_saved_address(driver, addr)
 
-                print(f"\n🔎 Checking: {name}")
-                open_product(driver, url)
-                close_popups(driver)
-                status = detect_state(driver)
-                price = get_price(driver)
-                if status == "UNKNOWN":
-                    path = save_screenshot(driver, "unknown_ui")
-                    send_telegram(f"⚠ UNKNOWN UI detected\n{name}\nScreenshot saved: {path}\n{url}")
-                    continue
+                for p in products:
+                    name = p["name"]
+                    url = p["url"].split("?")[0]
+                    target = int(p.get("target_price", 10**9))
 
-                print("STATUS:", status, "| PRICE:", price)
+                    logger.info(f"🔎 Checking: {name} @ {addr}")
 
-                prev, cur = update_product_state(url, status, price)
+                    open_product(driver, url)
+                    logger.info("🔄 Product opened")
+                    close_popups(driver)
+                    logger.info("🔄 Popups closed")
 
-                now = time.time()
-                last_alert = cur.get("last_alert", 0)
+                    status = detect_state(driver)
+                    price = get_price(driver)
+                    logger.info(f"🔄 Status: {status}, Price: {price}")
 
-                # ----------------------------
-                # Alert Rules
-                # ----------------------------
-
-                # If not buyable, skip alerts
-                if status in ["OUT_OF_STOCK", "NOT_DELIVERABLE"]:
-                    continue
-
-                # IN STOCK alerts
-                if status == "IN_STOCK":
-
-                    # 1) PRICE DROP
-                    if price is not None and price <= target:
-                        msg = format_msg(
-                            "🔥 PRICE DROP ALERT",
-                            name,
-                            status,
-                            price,
-                            url,
-                            extra=f"Target was ₹{target}"
+                    # UNKNOWN / AMBIGUOUS
+                    if status in ["UNKNOWN", "AMBIGUOUS"]:
+                        path = save_screenshot(driver, f"{status.lower()}_{addr}")
+                        send_telegram(
+                            f"⚠ {status} UI detected\n"
+                            f"{name}\n"
+                            f"Address: {addr}\n"
+                            f"Price: {price}\n"
+                            f"Screenshot: {path}\n"
+                            f"{url}"
                         )
-                        send_telegram(msg)
-                        mark_alerted(url)
                         continue
 
-                    # 2) FIRST RESTOCK
-                    if prev.get("last_status") != "IN_STOCK":
-                        msg = format_msg(
-                            "🔥 RESTOCK ALERT",
-                            name,
-                            status,
-                            price,
-                            url,
-                            extra="Product is BUYABLE now"
-                        )
-                        send_telegram(msg)
-                        mark_alerted(url)
+                    prev, cur = update_product_state(f"{url}::{addr}", status, price)
+
+                    now = time.time()
+                    last_alert = cur.get("last_alert", 0)
+
+                    if status in ["OUT_OF_STOCK", "NOT_DELIVERABLE"]:
                         continue
 
-                    # 3) REMINDER
-                    if now - last_alert > REMINDER_SECONDS:
-                        msg = format_msg(
-                            "⏰ REMINDER",
-                            name,
-                            status,
-                            price,
-                            url,
-                            extra="Still in stock — don’t miss it"
-                        )
-                        send_telegram(msg)
-                        mark_alerted(url)
+                    if status == "IN_STOCK":
+
+                        # PRICE DROP
+                        if price is not None and price <= target:
+                            send_telegram(
+                                format_msg(
+                                    "🔥 PRICE DROP ALERT",
+                                    name,
+                                    status,
+                                    price,
+                                    url,
+                                    extra=f"Address: {addr}\nTarget was ₹{target}"
+                                )
+                            )
+                            mark_alerted(f"{url}::{addr}")
+                            logger.info("🔄 Price drop alert sent")
+                            continue
+
+                        # RESTOCK
+                        if prev.get("last_status") != "IN_STOCK":
+                            send_telegram(
+                                format_msg(
+                                    "🔥 RESTOCK ALERT",
+                                    name,
+                                    status,
+                                    price,
+                                    url,
+                                    extra=f"Address: {addr}\nProduct is BUYABLE now"
+                                )
+                            )
+                            mark_alerted(f"{url}::{addr}")
+                            logger.info("🔄 Restock alert sent")
+                            continue
+
+                        # REMINDER
+                        if now - last_alert > REMINDER_SECONDS:
+                            send_telegram(
+                                format_msg(
+                                    "⏰ REMINDER",
+                                    name,
+                                    status,
+                                    price,
+                                    url,
+                                    extra=f"Address: {addr}\nStill in stock"
+                                )
+                            )
+                            mark_alerted(f"{url}::{addr}")
+                            logger.info("🔄 Reminder alert sent")
+                          
 
         except Exception as e:
             print("❌ Bot error:", e)
@@ -120,11 +141,14 @@ def main():
         finally:
             if driver:
                 try:
+                    driver.terminate_app('com.flipkart.android')
+                    logger.info("🔄 Flipkart app closed")
                     driver.quit()
                 except:
                     pass
 
         # Random sleep
+
         sleep_random(8, 15)
 
 
