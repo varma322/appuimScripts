@@ -9,6 +9,21 @@ import datetime
 
 FLIPKART_PKG = "com.flipkart.android"
 
+
+def wait_until_any(driver, signals, timeout=15, poll=0.5):
+    """Poll page_source until any signal string appears (case-insensitive)."""
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            source = driver.page_source.upper()
+            for sig in signals:
+                if sig.upper() in source:
+                    return sig
+        except Exception:
+            pass
+        time.sleep(poll)
+    return None
+
 def save_screenshot(driver, reason="unknown"):
     os.makedirs("screenshots", exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -54,8 +69,12 @@ def get_price(driver):
     return None
 
 
+# Signals that indicate the product page has loaded
+PRODUCT_PAGE_SIGNALS = ["₹", "Buy Now", "Buy at", "Add to cart", "Notify Me", "Sold Out"]
+
+
 def open_product(driver, url):
-    # More reliable than mobile:deepLink sometimes
+    """Open a product page and wait until it finishes loading."""
     driver.execute_script("mobile: shell", {
         "command": "am",
         "args": [
@@ -65,7 +84,9 @@ def open_product(driver, url):
             FLIPKART_PKG
         ]
     })
-    time.sleep(2)
+    result = wait_until_any(driver, PRODUCT_PAGE_SIGNALS, timeout=15)
+    if result is None:
+        logger.warning(f"Product page may not have loaded fully for: {url}")
 
 
 def detect_state(driver):
