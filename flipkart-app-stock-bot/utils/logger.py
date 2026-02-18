@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 
 LOG_FILE = os.path.join("logs", "app.log")
@@ -9,8 +10,8 @@ logger.setLevel(logging.INFO)
 
 _fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
-# file
-_fh = logging.FileHandler(LOG_FILE, encoding="utf-8")
+# file (rotating: 5 MB max, keep 3 backups)
+_fh = RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
 _fh.setFormatter(_fmt)
 logger.addHandler(_fh)
 

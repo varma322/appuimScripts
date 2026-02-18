@@ -11,6 +11,7 @@ from bot.telegram_notifier import send_telegram
 from bot.state_store import load_state, save_state, update_product_state, mark_alerted
 from bot.scheduler import sleep_random
 from utils.logger import logger
+from utils.cleanup import cleanup_old_screenshots
 
 load_dotenv()
 
@@ -42,6 +43,7 @@ def main():
     while True:
         driver = None
         try:
+            cleanup_old_screenshots()
             driver = create_driver()
             logger.info("🔄 Home screen")
             state = load_state()

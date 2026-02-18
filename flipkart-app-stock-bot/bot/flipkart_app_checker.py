@@ -50,10 +50,6 @@ def close_popups(driver):
             except:
                 pass
 
-def exists_contains(driver, text):
-    xpath = f"//*[contains(@text, '{text}')]"
-    return len(driver.find_elements(By.XPATH, xpath)) > 0
-
 
 def get_price(driver):
     # Scan screen for ₹xxxx
