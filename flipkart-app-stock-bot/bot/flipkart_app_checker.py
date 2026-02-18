@@ -2,12 +2,24 @@ import time
 import re
 from selenium.webdriver.common.by import By
 from utils.logger import logger
+from bot.constants import FLIPKART_PKG
 import os
 import datetime
 
 
-
-FLIPKART_PKG = "com.flipkart.android"
+def wait_until_any(driver, signals, timeout=15, poll=0.5):
+    """Poll page_source until any signal string appears (case-insensitive)."""
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            source = driver.page_source.upper()
+            for sig in signals:
+                if sig.upper() in source:
+                    return sig
+        except Exception:
+            pass
+        time.sleep(poll)
+    return None
 
 def save_screenshot(driver, reason="unknown"):
     os.makedirs("screenshots", exist_ok=True)
@@ -38,10 +50,6 @@ def close_popups(driver):
             except:
                 pass
 
-def exists_contains(driver, text):
-    xpath = f"//*[contains(@text, '{text}')]"
-    return len(driver.find_elements(By.XPATH, xpath)) > 0
-
 
 def get_price(driver):
     # Scan screen for ₹xxxx
@@ -54,8 +62,12 @@ def get_price(driver):
     return None
 
 
+# Signals that indicate the product page has loaded
+PRODUCT_PAGE_SIGNALS = ["₹", "Buy Now", "Buy at", "Add to cart", "Notify Me", "Sold Out"]
+
+
 def open_product(driver, url):
-    # More reliable than mobile:deepLink sometimes
+    """Open a product page and wait until it finishes loading."""
     driver.execute_script("mobile: shell", {
         "command": "am",
         "args": [
@@ -65,23 +77,27 @@ def open_product(driver, url):
             FLIPKART_PKG
         ]
     })
-    time.sleep(2)
+    result = wait_until_any(driver, PRODUCT_PAGE_SIGNALS, timeout=15)
+    if result is None:
+        logger.warning(f"Product page may not have loaded fully for: {url}")
 
 
 def detect_state(driver):
-    # 1) OUT OF STOCK
-    if exists_contains(driver, "Notify Me") or exists_contains(driver, "NOTIFY ME") or exists_contains(driver, "Change Address") or exists_contains(driver, "CHANGE ADDRESS "):
-        return "OUT_OF_STOCK"
+    """Detect product stock state from a single page_source fetch (1 round-trip)."""
+    source = driver.page_source.upper()
 
-    if exists_contains(driver, "Sold Out") or exists_contains(driver, "SOLD OUT"):
+    # 1) OUT OF STOCK
+    if "NOTIFY ME" in source or "CHANGE ADDRESS" in source:
+        return "OUT_OF_STOCK"
+    if "SOLD OUT" in source:
         return "OUT_OF_STOCK"
 
     # 2) NOT DELIVERABLE
-    if exists_contains(driver, "Not deliverable at your location"):
+    if "NOT DELIVERABLE AT YOUR LOCATION" in source:
         return "NOT_DELIVERABLE"
 
     # 3) IN STOCK (strongest signal)
-    if exists_contains(driver, "Buy at") or exists_contains(driver, "Buy Now") or exists_contains(driver, "Add to cart") or exists_contains(driver, "ADD TO CART"):
+    if "BUY AT" in source or "BUY NOW" in source or "ADD TO CART" in source:
         return "IN_STOCK"
 
     return "UNKNOWN"

@@ -6,3 +6,4 @@ state.json
 *.tmp
 venv/
 .venv/
+heartbeat.txt
