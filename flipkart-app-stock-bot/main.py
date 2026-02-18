@@ -4,6 +4,7 @@ import time
 from dotenv import load_dotenv
 from bot.address_switcher import select_saved_address
 
+from bot.constants import FLIPKART_PKG
 from bot.appium_driver import create_driver
 from bot.flipkart_app_checker import open_product, detect_state, get_price, close_popups, save_screenshot
 from bot.telegram_notifier import send_telegram
@@ -14,7 +15,7 @@ from utils.logger import logger
 load_dotenv()
 
 REMINDER_SECONDS = int(os.getenv("REMINDER_SECONDS", "2700"))
-ADDRESSES = ["Kishore", "Varma Kamadi"]
+ADDRESSES = [a.strip() for a in os.getenv("ADDRESSES", "Kishore,Varma Kamadi").split(",")]
 
 
 def load_products():
@@ -143,7 +144,7 @@ def main():
         finally:
             if driver:
                 try:
-                    driver.terminate_app('com.flipkart.android')
+                    driver.terminate_app(FLIPKART_PKG)
                     logger.info("🔄 Flipkart app closed")
                     driver.quit()
                 except:

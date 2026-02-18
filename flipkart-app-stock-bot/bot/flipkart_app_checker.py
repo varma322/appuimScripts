@@ -2,12 +2,9 @@ import time
 import re
 from selenium.webdriver.common.by import By
 from utils.logger import logger
+from bot.constants import FLIPKART_PKG
 import os
 import datetime
-
-
-
-FLIPKART_PKG = "com.flipkart.android"
 
 
 def wait_until_any(driver, signals, timeout=15, poll=0.5):

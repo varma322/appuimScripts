@@ -1,9 +1,8 @@
 import time
 from selenium.webdriver.common.by import By
 from bot.flipkart_app_checker import close_popups, save_screenshot, wait_until_any
+from bot.constants import FLIPKART_PKG
 from utils.logger import logger
-
-FLIPKART_PKG = "com.flipkart.android"
 
 
 
