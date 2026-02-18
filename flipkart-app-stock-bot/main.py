@@ -7,7 +7,7 @@ from bot.address_switcher import select_saved_address
 from bot.appium_driver import create_driver
 from bot.flipkart_app_checker import open_product, detect_state, get_price, close_popups, save_screenshot
 from bot.telegram_notifier import send_telegram
-from bot.state_store import update_product_state, mark_alerted
+from bot.state_store import load_state, save_state, update_product_state, mark_alerted
 from bot.scheduler import sleep_random
 from utils.logger import logger
 
@@ -43,6 +43,7 @@ def main():
         try:
             driver = create_driver()
             logger.info("🔄 Home screen")
+            state = load_state()
 
             for addr in ADDRESSES:
                 logger.info(f"📍 Switching address -> {addr}")
@@ -77,7 +78,7 @@ def main():
                         )
                         continue
 
-                    prev, cur = update_product_state(f"{url}::{addr}", status, price)
+                    prev, cur = update_product_state(state, f"{url}::{addr}", status, price)
 
                     now = time.time()
                     last_alert = cur.get("last_alert", 0)
@@ -99,7 +100,7 @@ def main():
                                     extra=f"Address: {addr}\nTarget was ₹{target}"
                                 )
                             )
-                            mark_alerted(f"{url}::{addr}")
+                            mark_alerted(state, f"{url}::{addr}")
                             logger.info("🔄 Price drop alert sent")
                             continue
 
@@ -115,7 +116,7 @@ def main():
                                     extra=f"Address: {addr}\nProduct is BUYABLE now"
                                 )
                             )
-                            mark_alerted(f"{url}::{addr}")
+                            mark_alerted(state, f"{url}::{addr}")
                             logger.info("🔄 Restock alert sent")
                             continue
 
@@ -131,9 +132,10 @@ def main():
                                     extra=f"Address: {addr}\nStill in stock"
                                 )
                             )
-                            mark_alerted(f"{url}::{addr}")
+                            mark_alerted(state, f"{url}::{addr}")
                             logger.info("🔄 Reminder alert sent")
-                          
+
+            save_state(state)
 
         except Exception as e:
             print("❌ Bot error:", e)
