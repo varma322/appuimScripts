@@ -13,6 +13,8 @@ from bot.scheduler import sleep_random
 from utils.logger import logger
 from utils.cleanup import cleanup_old_screenshots
 
+HEARTBEAT_FILE = "heartbeat.txt"
+
 load_dotenv()
 
 REMINDER_SECONDS = int(os.getenv("REMINDER_SECONDS", "2700"))
@@ -35,6 +37,15 @@ def format_msg(kind, product_name, status, price, url, extra=""):
     )
 
 
+def write_heartbeat():
+    """Write current timestamp to heartbeat file for watchdog."""
+    try:
+        with open(HEARTBEAT_FILE, "w") as f:
+            f.write(str(time.time()))
+    except Exception:
+        pass
+
+
 def main():
     products = load_products()
 
@@ -43,6 +54,7 @@ def main():
     while True:
         driver = None
         try:
+            write_heartbeat()
             cleanup_old_screenshots()
             driver = create_driver()
             logger.info("🔄 Home screen")
@@ -67,6 +79,7 @@ def main():
                     status = detect_state(driver)
                     price = get_price(driver)
                     logger.info(f"🔄 Status: {status}, Price: {price}")
+                    write_heartbeat()
 
                     # UNKNOWN / AMBIGUOUS
                     if status in ["UNKNOWN", "AMBIGUOUS"]:
