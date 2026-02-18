@@ -65,7 +65,7 @@ def open_product(driver, url):
             FLIPKART_PKG
         ]
     })
-    time.sleep(10)
+    time.sleep(2)
 
 
 def detect_state(driver):

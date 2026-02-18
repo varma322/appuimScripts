@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import tempfile
 
 STATE_FILE = "state.json"
 
@@ -9,13 +10,23 @@ def load_state():
     if not os.path.exists(STATE_FILE):
         return {}
     try:
-        return json.load(open(STATE_FILE, "r", encoding="utf-8"))
-    except:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
         return {}
 
 
 def save_state(state):
-    json.dump(state, open(STATE_FILE, "w", encoding="utf-8"), indent=2)
+    """Atomic write: write to temp file first, then rename over the target."""
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=".", suffix=".tmp")
+    try:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2)
+        os.replace(tmp_path, STATE_FILE)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
 
 def update_product_state(url: str, status: str, price: int | None):
