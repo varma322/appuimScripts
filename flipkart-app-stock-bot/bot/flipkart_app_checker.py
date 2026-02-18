@@ -69,19 +69,21 @@ def open_product(driver, url):
 
 
 def detect_state(driver):
-    # 1) OUT OF STOCK
-    if exists_contains(driver, "Notify Me") or exists_contains(driver, "NOTIFY ME") or exists_contains(driver, "Change Address") or exists_contains(driver, "CHANGE ADDRESS "):
-        return "OUT_OF_STOCK"
+    """Detect product stock state from a single page_source fetch (1 round-trip)."""
+    source = driver.page_source.upper()
 
-    if exists_contains(driver, "Sold Out") or exists_contains(driver, "SOLD OUT"):
+    # 1) OUT OF STOCK
+    if "NOTIFY ME" in source or "CHANGE ADDRESS" in source:
+        return "OUT_OF_STOCK"
+    if "SOLD OUT" in source:
         return "OUT_OF_STOCK"
 
     # 2) NOT DELIVERABLE
-    if exists_contains(driver, "Not deliverable at your location"):
+    if "NOT DELIVERABLE AT YOUR LOCATION" in source:
         return "NOT_DELIVERABLE"
 
     # 3) IN STOCK (strongest signal)
-    if exists_contains(driver, "Buy at") or exists_contains(driver, "Buy Now") or exists_contains(driver, "Add to cart") or exists_contains(driver, "ADD TO CART"):
+    if "BUY AT" in source or "BUY NOW" in source or "ADD TO CART" in source:
         return "IN_STOCK"
 
     return "UNKNOWN"
