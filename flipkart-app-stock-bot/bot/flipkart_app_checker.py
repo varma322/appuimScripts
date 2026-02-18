@@ -83,21 +83,25 @@ def open_product(driver, url):
 
 
 def detect_state(driver):
-    """Detect product stock state from a single page_source fetch (1 round-trip)."""
     source = driver.page_source.upper()
 
-    # 1) OUT OF STOCK
-    if "NOTIFY ME" in source or "CHANGE ADDRESS" in source:
+    # OUT OF STOCK
+    if "NOTIFY ME" in source:
         return "OUT_OF_STOCK"
     if "SOLD OUT" in source:
         return "OUT_OF_STOCK"
 
-    # 2) NOT DELIVERABLE
-    if "NOT DELIVERABLE AT YOUR LOCATION" in source:
+    # NOT DELIVERABLE
+    if "NOT DELIVERABLE AT YOUR LOCATION" in source or "CHANGE ADDRESS" in source:
         return "NOT_DELIVERABLE"
 
-    # 3) IN STOCK (strongest signal)
-    if "BUY AT" in source or "BUY NOW" in source or "ADD TO CART" in source:
+    # IN STOCK (BUYABLE)
+    if "BUY AT" in source or "BUY NOW" in source:
         return "IN_STOCK"
 
+    # Add to cart alone is ambiguous
+    if "ADD TO CART" in source:
+        return "AMBIGUOUS"
+
     return "UNKNOWN"
+
