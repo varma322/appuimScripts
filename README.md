@@ -65,12 +65,12 @@ Define the items you want to track:
 ```json
 [
     {
-        "name": "Instax Mini Film",
+        "name": "Product 1",
         "url": "https://www.flipkart.com/sample-product-link...",
         "target_price": 1400
     },
     {
-        "name": "Nikon Camera Bag",
+        "name": "Product 2",
         "url": "https://www.flipkart.com/sample-product-link...",
         "target_price": 1000
     }
