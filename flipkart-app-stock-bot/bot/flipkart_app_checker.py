@@ -52,14 +52,83 @@ def close_popups(driver):
 
 
 def get_price(driver):
-    # Scan screen for ₹xxxx
-    els = driver.find_elements(By.XPATH, "//*[contains(@text, '₹')]")
-    for el in els:
-        t = el.get_attribute("text") or ""
-        m = re.search(r"₹\s*([0-9,]+)", t)
-        if m:
-            return int(m.group(1).replace(",", ""))
-    return None
+    """
+    Extract real product price.
+    Heuristic: Main product price is usually the largest text element starting with '₹'.
+    """
+    # 1. Start with exact matches for Buy buttons (often reliable)
+    try:
+        buy_at_els = driver.find_elements(By.XPATH, "//*[contains(@text, 'Buy at')]")
+        for el in buy_at_els:
+            text = el.text
+            match = re.search(r"₹\s*([0-9,]+)", text)
+            if match:
+                price = int(match.group(1).replace(",", ""))
+                logger.info(f"Found price from Buy button: {price}")
+                return price
+    except Exception:
+        pass
+
+    # 2. Scan all text elements with '₹'
+    try:
+        candidates = []
+        price_elements = driver.find_elements(By.XPATH, "//*[contains(@text, '₹')]")
+
+        for el in price_elements:
+            try:
+                text = el.text.strip()
+                if not text or "₹" not in text:
+                    continue
+
+                # Check parent for AD marker
+                try:
+                    parent = el.find_element(By.XPATH, "./ancestor::*[1]")
+                    parent_desc = parent.get_attribute("content-desc") or ""
+                    if "AD" in parent_desc:
+                        continue
+                except:
+                    pass
+
+                # Parse price value
+                # Extract number after ₹
+                match = re.search(r"₹\s*([0-9,]+)", text)
+                if not match:
+                    continue
+                
+                value = int(match.group(1).replace(",", ""))
+
+                # Get element size (height is good proxy for font size/prominence)
+                bounds = el.get_attribute("bounds")
+                if bounds:
+                    # Parse bounds "[481,2056][651,2140]"
+                    coords = re.findall(r"\[(\d+),(\d+)\]", bounds)
+                    if len(coords) == 2:
+                        x1, y1 = map(int, coords[0])
+                        x2, y2 = map(int, coords[1])
+                        height = y2 - y1
+                        candidates.append({"value": value, "height": height})
+            except Exception:
+                continue
+
+        if not candidates:
+            logger.warning("No price candidates found.")
+            return None
+
+        # Sort by height descending
+        candidates.sort(key=lambda x: x["height"], reverse=True)
+        
+        # Log candidates for debug
+        # logger.info(f"Price candidates: {candidates}")
+
+        # Pick largest height. If tie, pick max value? 
+        # Usually main price is unique max height.
+        best_price = candidates[0]["value"]
+        logger.info(f"Selected price: {best_price} (height: {candidates[0]['height']})")
+        return best_price
+
+    except Exception as e:
+        logger.error(f"Error extracting price: {e}")
+        return None
 
 
 # Signals that indicate the product page has loaded
@@ -83,25 +152,71 @@ def open_product(driver, url):
 
 
 def detect_state(driver):
-    source = driver.page_source.upper()
+    # Wait for page to stabilize if needed, but open_product already waits for signals
+    page_source = driver.page_source.lower()
 
-    # OUT OF STOCK
-    if "NOTIFY ME" in source:
-        return "OUT_OF_STOCK"
-    if "SOLD OUT" in source:
-        return "OUT_OF_STOCK"
+    # 1️⃣ Hard OOS indicators
+    oos_keywords = [
+        "notify me",
+        "out of stock",
+        "currently unavailable",
+        "sold out"
+    ]
 
-    # NOT DELIVERABLE
-    if "NOT DELIVERABLE AT YOUR LOCATION" in source or "CHANGE ADDRESS" in source:
+    for word in oos_keywords:
+        if word in page_source:
+            return "OUT_OF_STOCK"
+
+    # 2️⃣ Delivery checks
+    if "not deliverable" in page_source or "change address" in page_source:
         return "NOT_DELIVERABLE"
 
-    # IN STOCK (BUYABLE)
-    if "BUY AT" in source or "BUY NOW" in source:
+    # 3️⃣ Strong IN STOCK indicators
+    try:
+        # Use find_elements to catch if present
+        # Note: XPath is case sensitive, but "Buy Now" usually has this exact casing or "BUY NOW"
+        # Since page_source is lower(), logic check uses lowercase, but find_elements uses exact if not normalized.
+        # Let's keep using 'contains' with text() for safety.
+        # But wait, we want robust logic.
+        
+        # Check source for immediate string match (faster/simpler)
+        if "buy now" in page_source or "buy at" in page_source:
+            return "IN_STOCK"
+            
+        # Add to cart is tricky (race condition).
+        # Only return IN_STOCK if NO negative signals are found after a wait.
+        if "add to cart" in page_source:
+             # Re-check negative signals
+            # logger.info("Found ADD TO CART. Re-checking for negative signals after delay.")
+            time.sleep(2)
+            page_source = driver.page_source.lower()
+            
+            if "not deliverable" in page_source or "change address" in page_source:
+                return "NOT_DELIVERABLE"
+            
+            if "notify me" in page_source or "sold out" in page_source:
+                return "OUT_OF_STOCK"
+                
+            return "IN_STOCK"
+
+    except:
+        pass
+
+    # 4️⃣ Fallback — if price exists but no Notify Me
+    price = get_price(driver)
+    if price:
+        # If we have a price and passed all negative checks, it's likely IN STOCK.
+        # Returning IN_STOCK allows main loop to verify price drop etc.
         return "IN_STOCK"
+    
+    # If we are here, it's truly unknown/ambiguous
+    # Dump source for debugging
+    try:
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        with open(f"logs/ambiguous_source_{ts}.txt", "w", encoding="utf-8") as f:
+            f.write(driver.page_source) # Save original case source
+        logger.warning(f"Ambiguous state. Source dumped to logs/ambiguous_source_{ts}.txt")
+    except Exception as e:
+        logger.error(f"Failed to dump source: {e}")
 
-    # Add to cart alone is ambiguous
-    if "ADD TO CART" in source:
-        return "AMBIGUOUS"
-
-    return "UNKNOWN"
-
+    return "AMBIGUOUS"
